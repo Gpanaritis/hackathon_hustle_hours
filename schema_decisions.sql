@@ -42,7 +42,7 @@ CREATE TABLE decisions.court_decisions (
 -- 2. EMBEDDINGS
 -- embedding: 384 dimensions (sentence-transformers all-MiniLM-L6-v2)
 CREATE TABLE decisions.decision_embeddings (
-    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              VARCHAR(36) PRIMARY KEY,
     decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
     chunk_index     INT         NOT NULL,
     chunk_text      TEXT        NOT NULL,
