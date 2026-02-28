@@ -13,8 +13,8 @@ build/
 .env
 backend/.env
 
-# Storage (uploaded PDFs)
-backend/storage/contracts/
+# Storage (uploaded files)
+backend/storage/
 
 # Node
 frontend/node_modules/
