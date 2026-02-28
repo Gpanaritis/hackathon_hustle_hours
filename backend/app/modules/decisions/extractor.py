@@ -13,6 +13,8 @@ MODEL = "claude-opus-4-6"
 
 SYSTEM_PROMPT = """You are an expert legal analyst. Extract structured data from the provided court decision document.
 
+IMPORTANT: All extracted text fields (court, judge, case_number, case_type, plaintiff, defendant, outcome, summary, appeal_of, arguments) must be returned in the same language as the source document. Do not translate anything.
+
 Return ONLY a valid JSON object with this exact structure (use null for missing fields):
 
 {
