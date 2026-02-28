@@ -19,6 +19,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/upload" className="text-sm text-gray-600 hover:text-gray-900">
             Upload
           </Link>
+          <span className="text-gray-300 select-none">|</span>
+          <Link href="/decisions" className="text-sm text-gray-600 hover:text-gray-900">
+            Decisions
+          </Link>
+          <Link href="/decisions/upload" className="text-sm text-gray-600 hover:text-gray-900">
+            Upload Decision
+          </Link>
+          <span className="text-gray-300 select-none">|</span>
           <Link href="/chat" className="text-sm text-gray-600 hover:text-gray-900">
             Chat
           </Link>

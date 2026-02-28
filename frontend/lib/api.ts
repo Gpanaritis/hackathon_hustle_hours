@@ -109,6 +109,92 @@ export async function uploadContract(file: File) {
   return res.json() as Promise<ContractDetail>;
 }
 
+// ── Decisions ────────────────────────────────────────────────────────────────
+
+export interface DecisionListItem {
+  id: string;
+  source_filename: string | null;
+  court: string | null;
+  judge: string | null;
+  case_number: string | null;
+  case_type: string | null;
+  plaintiff: string | null;
+  defendant: string | null;
+  outcome: string | null;
+  decision_date: string | null;
+  monetary_award: number | null;
+  processing_status: string;
+  created_at: string | null;
+}
+
+export interface DecisionArgument {
+  id: string;
+  argument: string;
+  position: number;
+}
+
+export interface DecisionLegalRef {
+  id: string;
+  reference: string;
+}
+
+export interface DecisionDetail extends DecisionListItem {
+  full_text: string | null;
+  summary: string | null;
+  appeal_of: string | null;
+  is_ocr: boolean;
+  ocr_confidence: number | null;
+  extraction_error: string | null;
+  arguments: DecisionArgument[];
+  legal_refs: DecisionLegalRef[];
+}
+
+export interface SimilarDecision {
+  id: string;
+  source_filename: string | null;
+  court: string | null;
+  case_number: string | null;
+  similarity: number;
+}
+
+export async function listDecisions(params: Record<string, string>) {
+  const query = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v) query.set(k, v);
+  }
+  const res = await fetch(`${API_BASE}/decisions?${query}`);
+  if (!res.ok) throw new Error("Failed to fetch decisions");
+  return res.json() as Promise<DecisionListItem[]>;
+}
+
+export async function getDecision(id: string) {
+  const res = await fetch(`${API_BASE}/decisions/${id}`);
+  if (!res.ok) throw new Error("Decision not found");
+  return res.json() as Promise<DecisionDetail>;
+}
+
+export async function getSimilarDecisions(id: string) {
+  const res = await fetch(`${API_BASE}/decisions/${id}/similar`);
+  if (!res.ok) throw new Error("Could not fetch similar decisions");
+  return res.json() as Promise<SimilarDecision[]>;
+}
+
+export async function uploadDecision(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/decisions/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Upload failed" }));
+    throw new Error(err.detail || "Upload failed");
+  }
+  return res.json() as Promise<DecisionDetail>;
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
 export async function chat(message: string, history: { role: string; content: string }[]) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",

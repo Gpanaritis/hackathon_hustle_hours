@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { uploadContract } from "@/lib/api";
+import { uploadDecision } from "@/lib/api";
 
 type FileStatus = "pending" | "processing" | "done" | "error";
 
@@ -10,10 +10,10 @@ interface FileEntry {
   file: File;
   status: FileStatus;
   error?: string;
-  contractId?: number;
+  decisionId?: string;
 }
 
-export default function UploadPage() {
+export default function UploadDecisionPage() {
   const router = useRouter();
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -21,7 +21,7 @@ export default function UploadPage() {
 
   function addFiles(incoming: FileList | File[]) {
     const pdfs = Array.from(incoming).filter((f) =>
-      f.name.toLowerCase().endsWith(".pdf")
+      f.name.toLowerCase().endsWith(".pdf") || f.name.toLowerCase().endsWith(".txt")
     );
     setFiles((prev) => {
       const existing = new Set(prev.map((e) => e.file.name));
@@ -56,7 +56,6 @@ export default function UploadPage() {
     for (let i = 0; i < pending.length; i += BATCH_SIZE) {
       const batch = pending.slice(i, i + BATCH_SIZE);
 
-      // Mark entire batch as processing
       setFiles((prev) =>
         prev.map((e) =>
           batch.some((b) => b.file.name === e.file.name)
@@ -68,11 +67,11 @@ export default function UploadPage() {
       await Promise.all(
         batch.map(async (entry) => {
           try {
-            const contract = await uploadContract(entry.file);
+            const decision = await uploadDecision(entry.file);
             setFiles((prev) =>
               prev.map((e) =>
                 e.file.name === entry.file.name
-                  ? { ...e, status: "done", contractId: contract.contract_id }
+                  ? { ...e, status: "done", decisionId: decision.id }
                   : e
               )
             );
@@ -101,7 +100,7 @@ export default function UploadPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold mb-6">Upload Contracts</h1>
+      <h1 className="text-2xl font-semibold mb-6">Upload Court Decisions</h1>
 
       {/* Drop zone */}
       <div
@@ -112,12 +111,12 @@ export default function UploadPage() {
           dragging ? "border-blue-400 bg-blue-50" : "border-gray-300 bg-white hover:border-gray-400"
         }`}
       >
-        <p className="text-gray-500 mb-3">Drag and drop PDFs here, or</p>
+        <p className="text-gray-500 mb-3">Drag and drop court decision PDFs or text files here, or</p>
         <label className="cursor-pointer bg-gray-900 text-white px-4 py-2 rounded text-sm hover:bg-gray-700">
           Browse
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,.txt"
             multiple
             onChange={onFileInput}
             className="hidden"
@@ -147,9 +146,9 @@ export default function UploadPage() {
                 {entry.status === "error" && (
                   <span className="text-red-600 text-xs">{entry.error}</span>
                 )}
-                {entry.status === "done" && entry.contractId && (
+                {entry.status === "done" && entry.decisionId && (
                   <a
-                    href={`/contracts/${entry.contractId}`}
+                    href={`/decisions/${entry.decisionId}`}
                     className="text-blue-600 text-xs hover:underline"
                   >
                     View →
@@ -183,17 +182,17 @@ export default function UploadPage() {
 
         {doneFiles.length > 0 && !uploading && (
           <button
-            onClick={() => router.push("/contracts")}
+            onClick={() => router.push("/decisions")}
             className="text-sm text-blue-600 hover:underline"
           >
-            View all contracts →
+            View all decisions →
           </button>
         )}
       </div>
 
       {uploading && (
         <p className="mt-3 text-sm text-gray-500">
-          Processing one at a time — each contract takes 30–60 seconds for Claude to analyze.
+          Processing in batches of 2 — each decision takes 30–60 seconds for Claude to analyze.
         </p>
       )}
     </div>

@@ -32,7 +32,7 @@ POST /contracts/upload
 ```
 
 Upload a PDF contract. The server will automatically:
-- Detect if the PDF is text-based or scanned
+- Detect if the PDF is text-based or scanned (OCR path)
 - Extract all structured fields using Claude
 - Generate an embedding for similarity search
 - Store everything in the database
@@ -75,10 +75,19 @@ print(res.json())
   "expiry_date": "2032-03-15",
   "is_exclusive": true,
   "status": "processed",
-  "signature_present": true,
-  "stamp_present": false,
   "upload_date": "2025-02-28T14:00:00",
-  "parties": [...],
+  "parties": [
+    {
+      "party_id": 1,
+      "role": "Producer",
+      "legal_name": "Acme Music LLC",
+      "representative_name": "John Smith",
+      "id_type": "VAT",
+      "id_value": "US123456789",
+      "address": "123 Main St, New York, NY",
+      "signing_status": "signature_and_stamp"
+    }
+  ],
   "works": [...],
   "terms": {...},
   "intelligence": {...}
@@ -110,8 +119,8 @@ Returns a paginated list of contracts. All query parameters are optional and can
 | `country_code` | string | 2-letter ISO code (e.g. `US`, `BG`, `DK`) |
 | `party_name` | string | Partial match on party legal name |
 | `expiring_this_year` | boolean | Only contracts expiring in the current year |
-| `missing_signature` | boolean | Only contracts where signature was not detected |
-| `missing_stamp` | boolean | Only contracts where stamp was not detected |
+| `missing_signature` | boolean | Only contracts where no party has a signature |
+| `missing_stamp` | boolean | Only contracts where no party has a stamp |
 | `page` | integer | Page number, default `1` |
 | `page_size` | integer | Results per page, default `50`, max `200` |
 
@@ -142,8 +151,6 @@ curl "http://<server-ip>:8000/api/v1/contracts?page=2&page_size=20"
     "execution_date": "2022-03-15",
     "expiry_date": "2032-03-15",
     "status": "processed",
-    "signature_present": true,
-    "stamp_present": false,
     "upload_date": "2025-02-28T14:00:00"
   }
 ]
@@ -178,8 +185,6 @@ curl http://<server-ip>:8000/api/v1/contracts/1
   "expiry_date": "2032-03-15",
   "is_exclusive": true,
   "status": "processed",
-  "signature_present": true,
-  "stamp_present": false,
   "upload_date": "2025-02-28T14:00:00",
   "parties": [
     {
@@ -189,7 +194,8 @@ curl http://<server-ip>:8000/api/v1/contracts/1
       "representative_name": "John Smith",
       "id_type": "VAT",
       "id_value": "US123456789",
-      "address": "123 Main St, New York, NY"
+      "address": "123 Main St, New York, NY",
+      "signing_status": "signature_and_stamp"
     }
   ],
   "works": [
@@ -248,7 +254,7 @@ Just open the URL directly: `http://<server-ip>:8000/api/v1/contracts/1/download
 
 | Status | Meaning |
 |--------|---------|
-| `404` | Contract not found, or PDF file missing from disk |
+| `404` | Contract not found, or file missing from disk |
 
 ---
 
@@ -258,7 +264,7 @@ Just open the URL directly: `http://<server-ip>:8000/api/v1/contracts/1/download
 GET /contracts/{contract_id}/similar
 ```
 
-Returns the 5 most similar contracts using vector cosine similarity on the contract's embedding.
+Returns the 5 most similar contracts using vector cosine similarity.
 
 **Example (curl)**
 ```bash
@@ -273,12 +279,6 @@ curl http://<server-ip>:8000/api/v1/contracts/1/similar
     "internal_ref_no": "BG001",
     "file_name": "contract_bg.pdf",
     "similarity": 91.4
-  },
-  {
-    "contract_id": 3,
-    "internal_ref_no": "DK002",
-    "file_name": "contract_dk.pdf",
-    "similarity": 87.2
   }
 ]
 ```
@@ -291,6 +291,266 @@ curl http://<server-ip>:8000/api/v1/contracts/1/similar
 |--------|---------|
 | `404` | Contract not found |
 | `422` | Contract has no embedding (processing may have failed) |
+
+---
+
+## Court Decisions
+
+### Submit Decision as Text
+
+```
+POST /decisions/from-text
+```
+
+Send the text of a court decision directly in the request body — no file needed. Useful when you have already extracted or copied the text.
+
+**Request body** — `application/json`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `text` | string | Yes | Full text of the court decision |
+| `label` | string | No | Optional name stored as the source filename (e.g. a case reference) |
+
+**Example (curl)**
+```bash
+curl -X POST http://<server-ip>:8000/api/v1/decisions/from-text \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "IN THE HIGH COURT OF JUSTICE\nCase No. 2024/001\n...",
+    "label": "2024-001-High-Court"
+  }'
+```
+
+**Example (Python)**
+```python
+import requests
+
+res = requests.post(
+    "http://<server-ip>:8000/api/v1/decisions/from-text",
+    json={
+        "text": open("decision.txt").read(),
+        "label": "2024-001"
+    }
+)
+print(res.json())
+```
+
+**Response** `201 Created` — same shape as [Get Decision Details](#get-decision-details).
+
+**Error responses**
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Text body is empty |
+| `422` | Extraction failed |
+
+---
+
+### Upload a Decision File
+
+```
+POST /decisions/upload
+```
+
+Upload a court decision as a PDF or plain-text (`.txt`) file. The server will:
+- For PDFs: detect if text-based or scanned, extract text accordingly
+- For `.txt` files: read content directly
+- Extract structured fields using Claude
+- Generate chunked embeddings for similarity search
+
+**Request** — `multipart/form-data`
+
+| Field | Type | Required |
+|-------|------|----------|
+| `file` | PDF or TXT file | Yes |
+
+**Example (curl)**
+```bash
+# PDF
+curl -X POST http://<server-ip>:8000/api/v1/decisions/upload \
+  -F "file=@decision.pdf"
+
+# Text file
+curl -X POST http://<server-ip>:8000/api/v1/decisions/upload \
+  -F "file=@decision.txt"
+```
+
+**Response** `201 Created` — same shape as [Get Decision Details](#get-decision-details).
+
+**Error responses**
+
+| Status | Meaning |
+|--------|---------|
+| `400` | File is not a PDF/TXT or is empty |
+| `422` | Extraction failed |
+
+---
+
+### List Decisions
+
+```
+GET /decisions
+```
+
+Returns a paginated list of court decisions. All query parameters are optional.
+
+**Query parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `court` | string | Partial match on court name |
+| `judge` | string | Partial match on judge name |
+| `case_type` | string | Partial match on case type (e.g. `copyright`) |
+| `outcome` | string | Partial match on outcome (e.g. `granted`, `dismissed`) |
+| `plaintiff` | string | Partial match on plaintiff name |
+| `defendant` | string | Partial match on defendant name |
+| `page` | integer | Page number, default `1` |
+| `page_size` | integer | Results per page, default `50`, max `200` |
+
+**Example (curl)**
+```bash
+# Filter by court
+curl "http://<server-ip>:8000/api/v1/decisions?court=High+Court"
+
+# Filter by outcome and case type
+curl "http://<server-ip>:8000/api/v1/decisions?outcome=granted&case_type=copyright"
+
+# Search by party
+curl "http://<server-ip>:8000/api/v1/decisions?plaintiff=Sony"
+```
+
+**Response** `200 OK`
+```json
+[
+  {
+    "id": "3f4a1b2c-...",
+    "source_filename": "decision.pdf",
+    "court": "High Court of Justice",
+    "judge": "Hon. J. Smith",
+    "case_number": "2024/001",
+    "case_type": "copyright",
+    "plaintiff": "Sony Music",
+    "defendant": "John Doe",
+    "outcome": "granted",
+    "decision_date": "2024-06-15",
+    "monetary_award": 50000.00,
+    "processing_status": "extracted",
+    "created_at": "2025-02-28T14:00:00"
+  }
+]
+```
+
+---
+
+### Get Decision Details
+
+```
+GET /decisions/{decision_id}
+```
+
+Returns full details for a single decision including extracted arguments, legal references, summary, and full text.
+
+**Example (curl)**
+```bash
+curl http://<server-ip>:8000/api/v1/decisions/3f4a1b2c-...
+```
+
+**Response** `200 OK`
+```json
+{
+  "id": "3f4a1b2c-...",
+  "source_filename": "decision.pdf",
+  "court": "High Court of Justice",
+  "judge": "Hon. J. Smith",
+  "case_number": "2024/001",
+  "case_type": "copyright",
+  "plaintiff": "Sony Music",
+  "defendant": "John Doe",
+  "outcome": "granted",
+  "decision_date": "2024-06-15",
+  "monetary_award": 50000.00,
+  "appeal_of": null,
+  "summary": "The court ruled in favour of Sony Music, finding that John Doe had infringed copyright...",
+  "full_text": "IN THE HIGH COURT OF JUSTICE...",
+  "processing_status": "extracted",
+  "is_ocr": false,
+  "ocr_confidence": null,
+  "extraction_error": null,
+  "created_at": "2025-02-28T14:00:00",
+  "arguments": [
+    { "id": "...", "argument": "Plaintiff established ownership of the copyright.", "position": 0 },
+    { "id": "...", "argument": "Defendant failed to obtain a licence.", "position": 1 }
+  ],
+  "legal_refs": [
+    { "id": "...", "reference": "Copyright, Designs and Patents Act 1988, s.16" },
+    { "id": "...", "reference": "Ladbroke v William Hill [1964] 1 WLR 273" }
+  ]
+}
+```
+
+**Error responses**
+
+| Status | Meaning |
+|--------|---------|
+| `404` | Decision not found |
+
+---
+
+### Download Original File
+
+```
+GET /decisions/{decision_id}/download
+```
+
+Returns the original uploaded file (PDF or TXT).
+
+**Example (curl)**
+```bash
+curl http://<server-ip>:8000/api/v1/decisions/3f4a1b2c-.../download --output decision.pdf
+```
+
+**Error responses**
+
+| Status | Meaning |
+|--------|---------|
+| `404` | Decision not found, or file missing from disk |
+
+---
+
+### Find Similar Decisions
+
+```
+GET /decisions/{decision_id}/similar
+```
+
+Returns the 5 most similar decisions using vector cosine similarity on chunked embeddings.
+
+**Example (curl)**
+```bash
+curl http://<server-ip>:8000/api/v1/decisions/3f4a1b2c-.../similar
+```
+
+**Response** `200 OK`
+```json
+[
+  {
+    "id": "7e9c3d1a-...",
+    "source_filename": "decision2.pdf",
+    "court": "Court of Appeal",
+    "case_number": "2023/088",
+    "similarity": 88.3
+  }
+]
+```
+
+`similarity` is a percentage (0–100). Higher = more similar.
+
+**Error responses**
+
+| Status | Meaning |
+|--------|---------|
+| `404` | Decision not found |
+| `422` | Decision has no embeddings (processing may have failed) |
 
 ---
 
@@ -311,7 +571,7 @@ Only `SELECT` queries are allowed — the database cannot be modified through th
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `message` | string | Yes | Your question in natural language |
-| `history` | array | No | Previous turns for follow-up questions (see below) |
+| `history` | array | No | Previous turns for follow-up questions |
 
 **Example (curl)**
 ```bash
@@ -388,6 +648,23 @@ curl -X POST http://<server-ip>:8000/api/v1/chat \
 | `processed` | Fully extracted and stored |
 | `needs_review` | Extraction partially failed — some fields may be missing |
 
+### Contract party `signing_status` values
+
+| Value | Meaning |
+|-------|---------|
+| `none` | No signature or stamp detected |
+| `signature_only` | Signature detected, no stamp |
+| `stamp_only` | Stamp detected, no signature |
+| `signature_and_stamp` | Both signature and stamp detected |
+
+### Decision `processing_status` values
+
+| Value | Meaning |
+|-------|---------|
+| `pending` | Received, extraction in progress |
+| `extracted` | Fully extracted and stored |
+| `failed` | Extraction failed — see `extraction_error` field |
+
 ### Common null fields
 
 Fields extracted by Claude will be `null` if the information was not found in the document. This is expected for optional fields.
@@ -396,7 +673,8 @@ Fields extracted by Claude will be `null` if the information was not found in th
 
 ## Notes
 
-- Processing time per contract is typically **30–90 seconds** depending on PDF complexity and size.
-- Duplicate uploads are rejected with `409`. Detection is based on file content (SHA-256 hash), not filename.
+- Processing time per document is typically **30–90 seconds** depending on PDF complexity and size.
+- Duplicate contract uploads are rejected with `409`. Detection is based on file content (SHA-256 hash), not filename.
 - The chat endpoint is **read-only** — it cannot modify, delete, or insert data.
 - Similarity scores are percentages. Anything above ~80% is a strong match.
+- Decisions use chunked embeddings (the document is split into 500-word overlapping chunks). Similarity is computed by averaging chunk vectors.
