@@ -20,8 +20,6 @@ CREATE TABLE contracts (
     expiry_date             DATE,
     is_exclusive            BOOLEAN DEFAULT TRUE,
     status                  VARCHAR(20) DEFAULT 'processing', -- processing | processed | needs_review
-    signature_present       BOOLEAN,
-    stamp_present           BOOLEAN,
     upload_date             TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -34,7 +32,8 @@ CREATE TABLE contract_parties (
     representative_name VARCHAR(255),
     id_type             VARCHAR(50),
     id_value            VARCHAR(100),
-    address             TEXT
+    address             TEXT,
+    signing_status      VARCHAR(20)  -- none | signature_only | stamp_only | signature_and_stamp
 );
 
 -- 3. MUSICAL WORKS
@@ -107,8 +106,6 @@ SELECT
     c.execution_date,
     c.expiry_date,
     c.status,
-    c.signature_present,
-    c.stamp_present,
     COUNT(DISTINCT mw.work_id)  AS total_works,
     COUNT(DISTINCT cp.party_id) AS total_parties,
     ct.remuneration_amount,

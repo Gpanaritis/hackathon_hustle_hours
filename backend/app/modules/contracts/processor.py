@@ -141,8 +141,6 @@ def process_contract(
         contract.language = c.get("language")
         contract.term_years = c.get("term_years")
         contract.is_exclusive = c.get("is_exclusive", True)
-        contract.signature_present = c.get("signature_present")
-        contract.stamp_present = c.get("stamp_present")
 
         if c.get("execution_date"):
             from datetime import date
@@ -168,6 +166,7 @@ def process_contract(
                 id_type=p.get("id_type"),
                 id_value=p.get("id_value"),
                 address=p.get("address"),
+                signing_status=p.get("signing_status"),
             )
             db.add(party)
 

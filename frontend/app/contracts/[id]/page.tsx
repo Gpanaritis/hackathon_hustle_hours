@@ -128,8 +128,6 @@ export default function ContractDetailPage() {
             <Field label="Term (years)" value={contract.term_years} />
             <Field label="Expiry Date" value={contract.expiry_date} />
             <Field label="Exclusive" value={contract.is_exclusive === null ? null : contract.is_exclusive ? "Yes" : "No"} />
-            <Field label="Signature Present" value={contract.signature_present === null ? null : contract.signature_present ? "Yes" : "No"} />
-            <Field label="Stamp Present" value={contract.stamp_present === null ? null : contract.stamp_present ? "Yes" : "No"} />
             <Field label="Uploaded" value={contract.upload_date ? new Date(contract.upload_date).toLocaleString() : null} />
           </dl>
         )}
@@ -147,6 +145,7 @@ export default function ContractDetailPage() {
                       <th className="text-left py-2 pr-4 font-medium text-gray-600">Legal Name</th>
                       <th className="text-left py-2 pr-4 font-medium text-gray-600">Representative</th>
                       <th className="text-left py-2 pr-4 font-medium text-gray-600">ID</th>
+                      <th className="text-left py-2 pr-4 font-medium text-gray-600">Signing</th>
                       <th className="text-left py-2 font-medium text-gray-600">Address</th>
                     </tr>
                   </thead>
@@ -157,6 +156,7 @@ export default function ContractDetailPage() {
                         <td className="py-2 pr-4">{p.legal_name ?? "—"}</td>
                         <td className="py-2 pr-4">{p.representative_name ?? "—"}</td>
                         <td className="py-2 pr-4">{p.id_type ? `${p.id_type}: ${p.id_value}` : "—"}</td>
+                        <td className="py-2 pr-4"><SigningBadge status={p.signing_status} /></td>
                         <td className="py-2 text-gray-500">{p.address ?? "—"}</td>
                       </tr>
                     ))}
@@ -260,5 +260,22 @@ function Field({ label, value }: { label: string; value: string | number | boole
       <dt className="text-gray-500 text-xs uppercase tracking-wide">{label}</dt>
       <dd className="mt-0.5 text-gray-900">{value !== null && value !== undefined ? String(value) : "—"}</dd>
     </div>
+  );
+}
+
+const SIGNING_LABELS: Record<string, { label: string; className: string }> = {
+  none:                 { label: "Nothing",            className: "bg-gray-100 text-gray-600" },
+  signature_only:       { label: "Signature only",     className: "bg-blue-100 text-blue-700" },
+  stamp_only:           { label: "Stamp only",          className: "bg-yellow-100 text-yellow-700" },
+  signature_and_stamp:  { label: "Signature & Stamp",  className: "bg-green-100 text-green-700" },
+};
+
+function SigningBadge({ status }: { status: string | null | undefined }) {
+  if (!status) return <span className="text-gray-400">—</span>;
+  const s = SIGNING_LABELS[status] ?? { label: status, className: "bg-gray-100 text-gray-600" };
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${s.className}`}>
+      {s.label}
+    </span>
   );
 }

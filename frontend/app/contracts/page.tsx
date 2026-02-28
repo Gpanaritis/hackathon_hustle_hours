@@ -166,8 +166,6 @@ export default function ContractsPage() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Executed</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Expires</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Sig</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Stamp</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -195,12 +193,6 @@ export default function ContractsPage() {
                         {c.status}
                       </span>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.signature_present === null ? "—" : c.signature_present ? "✓" : "✗"}
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.stamp_present === null ? "—" : c.stamp_present ? "✓" : "✗"}
                   </td>
                 </tr>
               ))}

@@ -13,6 +13,7 @@ class ContractPartyOut(BaseModel):
     id_type: Optional[str]
     id_value: Optional[str]
     address: Optional[str]
+    signing_status: Optional[str]  # none | signature_only | stamp_only | signature_and_stamp
 
     class Config:
         from_attributes = True
@@ -61,8 +62,6 @@ class ContractListItem(BaseModel):
     execution_date: Optional[date]
     expiry_date: Optional[date]
     status: Optional[str]
-    signature_present: Optional[bool]
-    stamp_present: Optional[bool]
     upload_date: Optional[datetime]
 
     class Config:
@@ -81,8 +80,6 @@ class ContractDetail(BaseModel):
     expiry_date: Optional[date]
     is_exclusive: Optional[bool]
     status: Optional[str]
-    signature_present: Optional[bool]
-    stamp_present: Optional[bool]
     upload_date: Optional[datetime]
     parties: List[ContractPartyOut] = []
     works: List[MusicalWorkOut] = []

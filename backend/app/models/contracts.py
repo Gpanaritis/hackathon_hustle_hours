@@ -1,6 +1,5 @@
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
-    Boolean,
     Column,
     Date,
     DateTime,
@@ -9,6 +8,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Boolean,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -32,8 +32,6 @@ class Contract(Base):
     expiry_date = Column(Date, nullable=True)
     is_exclusive = Column(Boolean, default=True)
     status = Column(String(20), default="processing")  # processing | processed | needs_review
-    signature_present = Column(Boolean, nullable=True)
-    stamp_present = Column(Boolean, nullable=True)
     upload_date = Column(DateTime, server_default=func.now())
 
     parties = relationship("ContractParty", back_populates="contract", cascade="all, delete-orphan")
@@ -53,6 +51,7 @@ class ContractParty(Base):
     id_type = Column(String(50), nullable=True)
     id_value = Column(String(100), nullable=True)
     address = Column(Text, nullable=True)
+    signing_status = Column(String(20), nullable=True)  # none | signature_only | stamp_only | signature_and_stamp
 
     contract = relationship("Contract", back_populates="parties")
 

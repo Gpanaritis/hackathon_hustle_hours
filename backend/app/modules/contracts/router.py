@@ -67,10 +67,20 @@ def list_contracts(
         q = q.filter(extract("year", Contract.expiry_date) == current_year)
 
     if missing_signature:
-        q = q.filter(Contract.signature_present == False)
+        # Contracts where at least one party has no signature
+        q = q.filter(Contract.contract_id.in_(
+            db.query(ContractParty.contract_id).filter(
+                ContractParty.signing_status.in_(["none", "stamp_only"])
+            )
+        ))
 
     if missing_stamp:
-        q = q.filter(Contract.stamp_present == False)
+        # Contracts where at least one party has no stamp
+        q = q.filter(Contract.contract_id.in_(
+            db.query(ContractParty.contract_id).filter(
+                ContractParty.signing_status.in_(["none", "signature_only"])
+            )
+        ))
 
     offset = (page - 1) * page_size
     contracts = q.order_by(Contract.upload_date.desc()).offset(offset).limit(page_size).all()

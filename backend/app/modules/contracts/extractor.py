@@ -26,9 +26,7 @@ Return ONLY a valid JSON object with this exact structure (use null for missing 
     "execution_date": "YYYY-MM-DD or null",
     "term_years": integer or null,
     "expiry_date": "YYYY-MM-DD or null",
-    "is_exclusive": true or false or null,
-    "signature_present": true or false,
-    "stamp_present": true or false
+    "is_exclusive": true or false or null
   },
   "parties": [
     {
@@ -37,7 +35,8 @@ Return ONLY a valid JSON object with this exact structure (use null for missing 
       "representative_name": "string or null",
       "id_type": "SSN | EGN | CPR | VAT | Passport | other or null",
       "id_value": "string or null",
-      "address": "string or null"
+      "address": "string or null",
+      "signing_status": "none | signature_only | stamp_only | signature_and_stamp"
     }
   ],
   "musical_works": [

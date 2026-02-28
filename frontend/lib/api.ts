@@ -9,8 +9,6 @@ export interface ContractListItem {
   execution_date: string | null;
   expiry_date: string | null;
   status: string | null;
-  signature_present: boolean | null;
-  stamp_present: boolean | null;
   upload_date: string | null;
 }
 
@@ -22,6 +20,7 @@ export interface ContractParty {
   id_type: string | null;
   id_value: string | null;
   address: string | null;
+  signing_status: "none" | "signature_only" | "stamp_only" | "signature_and_stamp" | null;
 }
 
 export interface MusicalWork {
