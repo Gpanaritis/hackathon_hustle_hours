@@ -98,6 +98,24 @@ def get_decision(decision_id: str, db: Session = Depends(get_db)):
     return decision
 
 
+@router.delete("/{decision_id}", status_code=204)
+def delete_decision(decision_id: str, db: Session = Depends(get_db)):
+    decision = db.query(CourtDecision).filter(CourtDecision.id == decision_id).first()
+    if not decision:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+
+    # Remove file from disk if it exists
+    from pathlib import Path as _Path
+    source = decision.source_filename or ""
+    ext = _Path(source).suffix.lower() if source else ".pdf"
+    file_path = Path(settings.storage_path).parent / "decisions" / f"{decision_id}{ext}"
+    if file_path.exists():
+        file_path.unlink()
+
+    db.delete(decision)
+    db.commit()
+
+
 @router.get("/{decision_id}/download")
 def download_decision(decision_id: str, db: Session = Depends(get_db)):
     decision = db.query(CourtDecision).filter(CourtDecision.id == decision_id).first()

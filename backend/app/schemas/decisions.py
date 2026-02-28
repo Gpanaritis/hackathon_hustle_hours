@@ -5,6 +5,16 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+class DecisionCategoryOut(BaseModel):
+    id: str
+    category: str
+    subcategory: str
+    confidence: float
+
+    class Config:
+        from_attributes = True
+
+
 class DecisionArgumentOut(BaseModel):
     id: str
     side: str  # 'plaintiff' or 'defendant'
@@ -62,6 +72,7 @@ class DecisionDetail(BaseModel):
     ocr_confidence: Optional[float]
     extraction_error: Optional[str]
     created_at: Optional[datetime]
+    categories: List[DecisionCategoryOut] = []
     arguments: List[DecisionArgumentOut] = []
     legal_refs: List[DecisionLegalRefOut] = []
 

@@ -14,9 +14,9 @@ from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.decisions import CourtDecision, DecisionArgument, DecisionEmbedding, DecisionLegalRef
+from app.models.decisions import CourtDecision, DecisionArgument, DecisionCategory, DecisionEmbedding, DecisionLegalRef
 from app.modules.contracts.embedder import generate_embedding
-from app.modules.decisions.extractor import extract_decision_data
+from app.modules.decisions.extractor import classify_decision, extract_decision_data
 
 MIN_TEXT_CHARS = 50
 IMAGE_DPI = 200
@@ -76,6 +76,32 @@ def _save_file(file_bytes: bytes, decision_id: str, file_name: str) -> str:
     return str(file_path)
 
 
+def _build_classification_context(decision: "CourtDecision", extraction: dict) -> str:
+    """Build a rich text context for classification from all extracted fields."""
+    parts = []
+
+    if decision.case_type:
+        parts.append(f"Case type: {decision.case_type}")
+    if decision.outcome:
+        parts.append(f"Outcome: {decision.outcome}")
+    if decision.summary:
+        parts.append(f"Summary: {decision.summary}")
+
+    plaintiff_args = extraction.get("plaintiff_arguments", [])
+    if plaintiff_args:
+        parts.append("Plaintiff arguments:\n" + "\n".join(f"- {a}" for a in plaintiff_args))
+
+    defendant_args = extraction.get("defendant_arguments", [])
+    if defendant_args:
+        parts.append("Defendant arguments:\n" + "\n".join(f"- {a}" for a in defendant_args))
+
+    legal_refs = extraction.get("legal_refs", [])
+    if legal_refs:
+        parts.append("Legal references:\n" + "\n".join(f"- {r}" for r in legal_refs))
+
+    return "\n\n".join(parts)
+
+
 def process_decision_from_text(
     text: str,
     label: str,
@@ -116,6 +142,18 @@ def process_decision_from_text(
                 decision.decision_date = date.fromisoformat(extraction["decision_date"])
             except (ValueError, TypeError):
                 pass
+
+        classification_context = _build_classification_context(decision, extraction)
+        if classification_context:
+            categories = classify_decision(classification_context)
+            for cat in categories:
+                db.add(DecisionCategory(
+                    id=str(uuid.uuid4()),
+                    decision_id=decision_id,
+                    category=cat.get("category", ""),
+                    subcategory=cat.get("subcategory", ""),
+                    confidence=float(cat.get("confidence", 0.0)),
+                ))
 
         for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):
             db.add(DecisionArgument(
@@ -230,6 +268,18 @@ def process_decision(
                 pass
 
         # Arguments
+        classification_context = _build_classification_context(decision, extraction)
+        if classification_context:
+            categories = classify_decision(classification_context)
+            for cat in categories:
+                db.add(DecisionCategory(
+                    id=str(uuid.uuid4()),
+                    decision_id=decision_id,
+                    category=cat.get("category", ""),
+                    subcategory=cat.get("subcategory", ""),
+                    confidence=float(cat.get("confidence", 0.0)),
+                ))
+
         for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):
             db.add(DecisionArgument(
                 id=str(uuid.uuid4()),

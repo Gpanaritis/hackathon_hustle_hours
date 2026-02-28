@@ -127,6 +127,13 @@ export interface DecisionListItem {
   created_at: string | null;
 }
 
+export interface DecisionCategory {
+  id: string;
+  category: string;
+  subcategory: string;
+  confidence: number;
+}
+
 export interface DecisionArgument {
   id: string;
   side: "plaintiff" | "defendant";
@@ -146,6 +153,7 @@ export interface DecisionDetail extends DecisionListItem {
   is_ocr: boolean;
   ocr_confidence: number | null;
   extraction_error: string | null;
+  categories: DecisionCategory[];
   arguments: DecisionArgument[];
   legal_refs: DecisionLegalRef[];
 }
@@ -178,6 +186,11 @@ export async function getSimilarDecisions(id: string) {
   const res = await fetch(`${API_BASE}/decisions/${id}/similar`);
   if (!res.ok) throw new Error("Could not fetch similar decisions");
   return res.json() as Promise<SimilarDecision[]>;
+}
+
+export async function deleteDecision(id: string) {
+  const res = await fetch(`${API_BASE}/decisions/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete decision");
 }
 
 export async function uploadDecision(file: File) {

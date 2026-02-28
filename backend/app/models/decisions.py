@@ -56,6 +56,7 @@ class CourtDecision(Base):
     embeddings = relationship("DecisionEmbedding", back_populates="decision", cascade="all, delete-orphan")
     arguments = relationship("DecisionArgument", back_populates="decision", cascade="all, delete-orphan")
     legal_refs = relationship("DecisionLegalRef", back_populates="decision", cascade="all, delete-orphan")
+    categories = relationship("DecisionCategory", back_populates="decision", cascade="all, delete-orphan")
 
 
 class DecisionEmbedding(Base):
@@ -70,6 +71,19 @@ class DecisionEmbedding(Base):
     created_at = Column(TIMESTAMP, server_default=func.now())
 
     decision = relationship("CourtDecision", back_populates="embeddings")
+
+
+class DecisionCategory(Base):
+    __tablename__ = "decision_categories"
+    __table_args__ = {"schema": "decisions"}
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    decision_id = Column(String(36), ForeignKey("decisions.court_decisions.id", ondelete="CASCADE"), nullable=False)
+    category = Column(Text, nullable=False)
+    subcategory = Column(Text, nullable=False)
+    confidence = Column(Float, nullable=False)
+
+    decision = relationship("CourtDecision", back_populates="categories")
 
 
 class DecisionArgument(Base):
