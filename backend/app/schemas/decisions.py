@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class DecisionArgumentOut(BaseModel):
     id: str
+    side: str  # 'plaintiff' or 'defendant'
     argument: str
     position: int
 

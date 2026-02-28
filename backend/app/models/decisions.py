@@ -78,6 +78,7 @@ class DecisionArgument(Base):
 
     id = Column(String(36), primary_key=True, default=_uuid)
     decision_id = Column(String(36), ForeignKey("decisions.court_decisions.id", ondelete="CASCADE"), nullable=False)
+    side = Column(String(20), nullable=False)  # 'plaintiff' or 'defendant'
     argument = Column(Text, nullable=False)
     position = Column(Integer, nullable=False)
 

@@ -117,10 +117,19 @@ def process_decision_from_text(
             except (ValueError, TypeError):
                 pass
 
-        for i, arg in enumerate(extraction.get("arguments", [])):
+        for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):
             db.add(DecisionArgument(
                 id=str(uuid.uuid4()),
                 decision_id=decision_id,
+                side="plaintiff",
+                argument=arg,
+                position=i,
+            ))
+        for i, arg in enumerate(extraction.get("defendant_arguments", [])):
+            db.add(DecisionArgument(
+                id=str(uuid.uuid4()),
+                decision_id=decision_id,
+                side="defendant",
                 argument=arg,
                 position=i,
             ))
@@ -221,10 +230,19 @@ def process_decision(
                 pass
 
         # Arguments
-        for i, arg in enumerate(extraction.get("arguments", [])):
+        for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):
             db.add(DecisionArgument(
                 id=str(uuid.uuid4()),
                 decision_id=decision_id,
+                side="plaintiff",
+                argument=arg,
+                position=i,
+            ))
+        for i, arg in enumerate(extraction.get("defendant_arguments", [])):
+            db.add(DecisionArgument(
+                id=str(uuid.uuid4()),
+                decision_id=decision_id,
+                side="defendant",
                 argument=arg,
                 position=i,
             ))

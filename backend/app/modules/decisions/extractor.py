@@ -27,9 +27,13 @@ Return ONLY a valid JSON object with this exact structure (use null for missing 
   "summary": "2-3 sentence summary of the decision",
   "monetary_award": number or null,
   "appeal_of": "reference to the original case being appealed, or null",
-  "arguments": [
-    "main argument 1",
-    "main argument 2"
+  "plaintiff_arguments": [
+    "plaintiff argument 1",
+    "plaintiff argument 2"
+  ],
+  "defendant_arguments": [
+    "defendant argument 1",
+    "defendant argument 2"
   ],
   "legal_refs": [
     "statute or case reference 1",

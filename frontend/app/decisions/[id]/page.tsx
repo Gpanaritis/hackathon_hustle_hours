@@ -40,7 +40,7 @@ export default function DecisionDetailPage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "metadata", label: "Metadata" },
-    { key: "arguments", label: `Arguments (${decision.arguments.length})` },
+    { key: "arguments", label: `Arguments (${decision.arguments.length})` + (decision.arguments.length ? ` · ${decision.arguments.filter(a => a.side === "plaintiff").length}P / ${decision.arguments.filter(a => a.side === "defendant").length}D` : "") },
     { key: "legal_refs", label: `Legal Refs (${decision.legal_refs.length})` },
     { key: "summary", label: "Summary" },
     { key: "full_text", label: "Full Text" },
@@ -151,19 +151,22 @@ export default function DecisionDetailPage() {
         )}
 
         {activeTab === "arguments" && (
-          <div>
+          <div className="space-y-6">
             {decision.arguments.length === 0 ? (
               <p className="text-gray-500 text-sm">No arguments extracted.</p>
             ) : (
-              <ol className="space-y-3 text-sm list-decimal list-inside">
-                {decision.arguments
-                  .sort((a, b) => a.position - b.position)
-                  .map((arg) => (
-                    <li key={arg.id} className="text-gray-800 leading-relaxed">
-                      {arg.argument}
-                    </li>
-                  ))}
-              </ol>
+              <>
+                <ArgumentSection
+                  title="Plaintiff Arguments"
+                  args={decision.arguments.filter((a) => a.side === "plaintiff")}
+                  color="blue"
+                />
+                <ArgumentSection
+                  title="Defendant Arguments"
+                  args={decision.arguments.filter((a) => a.side === "defendant")}
+                  color="red"
+                />
+              </>
             )}
           </div>
         )}
@@ -207,6 +210,40 @@ export default function DecisionDetailPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ArgumentSection({
+  title,
+  args,
+  color,
+}: {
+  title: string;
+  args: { id: string; argument: string; position: number }[];
+  color: "blue" | "red";
+}) {
+  const border = color === "blue" ? "border-blue-200" : "border-red-200";
+  const heading = color === "blue" ? "text-blue-700" : "text-red-700";
+  const dot = color === "blue" ? "bg-blue-400" : "bg-red-400";
+
+  return (
+    <div className={`border-l-4 ${border} pl-4`}>
+      <h4 className={`font-medium text-sm mb-2 ${heading}`}>{title}</h4>
+      {args.length === 0 ? (
+        <p className="text-gray-400 text-sm">None extracted.</p>
+      ) : (
+        <ol className="space-y-2 text-sm">
+          {args
+            .sort((a, b) => a.position - b.position)
+            .map((arg) => (
+              <li key={arg.id} className="flex gap-2 text-gray-800 leading-relaxed">
+                <span className={`w-1.5 h-1.5 rounded-full ${dot} shrink-0 mt-1.5`} />
+                {arg.argument}
+              </li>
+            ))}
+        </ol>
+      )}
     </div>
   );
 }

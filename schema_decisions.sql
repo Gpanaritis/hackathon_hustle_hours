@@ -55,6 +55,7 @@ CREATE TABLE decisions.decision_embeddings (
 CREATE TABLE decisions.decision_arguments (
     id              VARCHAR(36) PRIMARY KEY,
     decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    side            VARCHAR(20) NOT NULL,   -- 'plaintiff' or 'defendant'
     argument        TEXT        NOT NULL,
     position        INT         NOT NULL
 );

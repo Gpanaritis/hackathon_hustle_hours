@@ -129,6 +129,7 @@ export interface DecisionListItem {
 
 export interface DecisionArgument {
   id: string;
+  side: "plaintiff" | "defendant";
   argument: string;
   position: number;
 }
