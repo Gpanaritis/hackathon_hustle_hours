@@ -9,7 +9,6 @@ class DecisionCategoryOut(BaseModel):
     id: str
     category: str
     subcategory: str
-    confidence: float
 
     class Config:
         from_attributes = True

@@ -81,7 +81,6 @@ class DecisionCategory(Base):
     decision_id = Column(String(36), ForeignKey("decisions.court_decisions.id", ondelete="CASCADE"), nullable=False)
     category = Column(Text, nullable=False)
     subcategory = Column(Text, nullable=False)
-    confidence = Column(Float, nullable=False)
 
     decision = relationship("CourtDecision", back_populates="categories")
 

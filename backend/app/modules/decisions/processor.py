@@ -152,7 +152,6 @@ def process_decision_from_text(
                     decision_id=decision_id,
                     category=cat.get("category", ""),
                     subcategory=cat.get("subcategory", ""),
-                    confidence=float(cat.get("confidence", 0.0)),
                 ))
 
         for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):
@@ -277,7 +276,6 @@ def process_decision(
                     decision_id=decision_id,
                     category=cat.get("category", ""),
                     subcategory=cat.get("subcategory", ""),
-                    confidence=float(cat.get("confidence", 0.0)),
                 ))
 
         for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):

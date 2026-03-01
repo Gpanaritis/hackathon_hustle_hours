@@ -65,8 +65,7 @@ CREATE TABLE decisions.decision_categories (
     id          VARCHAR(36) PRIMARY KEY,
     decision_id VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
     category    TEXT        NOT NULL,
-    subcategory TEXT        NOT NULL,
-    confidence  FLOAT       NOT NULL
+    subcategory TEXT        NOT NULL
 );
 
 -- 5. LEGAL REFERENCES

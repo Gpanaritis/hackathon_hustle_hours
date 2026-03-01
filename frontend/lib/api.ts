@@ -131,7 +131,6 @@ export interface DecisionCategory {
   id: string;
   category: string;
   subcategory: string;
-  confidence: number;
 }
 
 export interface DecisionArgument {

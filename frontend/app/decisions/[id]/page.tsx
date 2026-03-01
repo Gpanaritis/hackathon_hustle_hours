@@ -172,18 +172,13 @@ export default function DecisionDetailPage() {
               <p className="text-gray-500 text-sm">No categories assigned.</p>
             ) : (
               <div className="space-y-2">
-                {decision.categories
-                  .sort((a, b) => b.confidence - a.confidence)
-                  .map((cat) => (
-                    <div key={cat.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-4 py-2.5 text-sm">
-                      <div>
-                        <span className="text-gray-500 text-xs">{cat.category}</span>
-                        <span className="mx-2 text-gray-300">/</span>
-                        <span className="font-medium text-gray-800">{cat.subcategory.replace(/_/g, " ")}</span>
-                      </div>
-                      <ConfidenceBadge confidence={cat.confidence} />
-                    </div>
-                  ))}
+                {decision.categories.map((cat) => (
+                  <div key={cat.id} className="bg-gray-50 border border-gray-200 rounded px-4 py-2.5 text-sm">
+                    <span className="text-gray-500 text-xs">{cat.category}</span>
+                    <span className="mx-2 text-gray-300">/</span>
+                    <span className="font-medium text-gray-800">{cat.subcategory.replace(/_/g, " ")}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -250,19 +245,6 @@ export default function DecisionDetailPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function ConfidenceBadge({ confidence }: { confidence: number }) {
-  const pct = Math.round(confidence * 100);
-  const color =
-    pct >= 80 ? "bg-green-100 text-green-700" :
-    pct >= 50 ? "bg-yellow-100 text-yellow-700" :
-                "bg-gray-100 text-gray-600";
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${color}`}>
-      {pct}%
-    </span>
   );
 }
 
