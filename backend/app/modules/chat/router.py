@@ -18,69 +18,84 @@ router = APIRouter()
 MODEL = "claude-opus-4-6"
 
 DB_SCHEMA = """
-Database schema (PostgreSQL):
+-- =====================================================
+-- COURT DECISIONS — DATABASE SCHEMA
+-- PostgreSQL + pgvector
+-- Schema: decisions
+-- =====================================================
 
-contracts (
-  contract_id SERIAL PRIMARY KEY,
-  internal_ref_no VARCHAR(50),
-  file_name VARCHAR(255),
-  pdf_path TEXT,
-  file_hash VARCHAR(64),
-  country_code CHAR(2),
-  jurisdiction_state_city VARCHAR(100),
-  language VARCHAR(20),
-  execution_date DATE,
-  term_years INTEGER,
-  expiry_date DATE,
-  is_exclusive BOOLEAN,
-  status VARCHAR(20),
-  signature_present BOOLEAN,
-  stamp_present BOOLEAN,
-  upload_date TIMESTAMP
-)
+CREATE EXTENSION IF NOT EXISTS vector;
 
-contract_parties (
-  party_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  role VARCHAR(50),
-  legal_name VARCHAR(255),
-  representative_name VARCHAR(255),
-  id_type VARCHAR(50),
-  id_value VARCHAR(100),
-  address TEXT
-)
+CREATE SCHEMA IF NOT EXISTS decisions;
 
-musical_works (
-  work_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  title VARCHAR(255),
-  artist_performer VARCHAR(255),
-  lyricist VARCHAR(255),
-  isrc_code VARCHAR(20),
-  collection_society VARCHAR(50)
-)
+-- ENUM
+CREATE TYPE decisions.decisionstatus AS ENUM ('pending', 'extracted', 'failed');
 
-contract_terms (
-  term_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  remuneration_amount DECIMAL(15,2),
-  currency VARCHAR(3),
-  min_penalty_liquidated_damages DECIMAL(15,2),
-  delivery_deadline_days INTEGER,
-  registration_deadline_days INTEGER,
-  streaming_requirement_days INTEGER
-)
+-- 1. COURT DECISIONS (core record)
+CREATE TABLE decisions.court_decisions (
+    id                  VARCHAR(36)                     PRIMARY KEY,
+    source_filename     TEXT,
 
-contract_intelligence (
-  intel_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  raw_text TEXT,
-  summary_short TEXT,
-  translated_text_en TEXT
-)
+    court               TEXT,
+    judge               TEXT,
+    case_number         TEXT,
+    case_type           TEXT,
+    plaintiff           TEXT,
+    defendant           TEXT,
+    outcome             TEXT,
+    decision_date       DATE,
+
+    full_text           TEXT,
+    summary             TEXT,
+    monetary_award      NUMERIC(15, 2),
+    appeal_of           TEXT,
+
+    processing_status   decisions.decisionstatus        NOT NULL DEFAULT 'pending',
+    is_ocr              BOOLEAN                         NOT NULL DEFAULT FALSE,
+    ocr_confidence      FLOAT,
+    extraction_error    TEXT,
+
+    created_at          TIMESTAMPTZ                     NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ                     NOT NULL DEFAULT NOW()
+);
+
+-- 2. EMBEDDINGS
+CREATE TABLE decisions.decision_embeddings (
+    id              VARCHAR(36) PRIMARY KEY,
+    decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    chunk_index     INT         NOT NULL,
+    chunk_text      TEXT        NOT NULL,
+    embedding       VECTOR(384),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (decision_id, chunk_index)
+);
+
+-- 3. ARGUMENTS
+CREATE TABLE decisions.decision_arguments (
+    id              VARCHAR(36) PRIMARY KEY,
+    decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    side            VARCHAR(20) NOT NULL,
+    argument        TEXT        NOT NULL,
+    position        INT         NOT NULL
+);
+
+-- 4. CATEGORIES
+CREATE TABLE decisions.decision_categories (
+    id          VARCHAR(36) PRIMARY KEY,
+    decision_id VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    category    TEXT        NOT NULL,
+    subcategory TEXT        NOT NULL
+);
+
+-- 5. LEGAL REFERENCES
+CREATE TABLE decisions.decision_legal_refs (
+    id              VARCHAR(36) PRIMARY KEY,
+    decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    reference       TEXT        NOT NULL
+);
 """
 
-SYSTEM_PROMPT = f"""You are a SQL expert assistant for a music contract management system.
+SYSTEM_PROMPT = f"""You are a SQL expert assistant for a court decisions management system. You help users query a database of court decisions, including case details, parties (plaintiff/defendant), arguments, legal references, and categories.
 
 {DB_SCHEMA}
 

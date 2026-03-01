@@ -11,11 +11,11 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  "Show contracts expiring this year",
-  "List contracts with missing signatures",
-  "Show all contracts from Bulgaria",
-  "Which contracts have a penalty above 10000?",
-  "List all musical works across all contracts",
+  "Show all decisions from this year",
+  "List decisions where the plaintiff won",
+  "Which cases had a monetary award above 10000?",
+  "Show decisions by judge",
+  "List all legal references used across decisions",
 ];
 
 export default function ChatPage() {
@@ -66,14 +66,14 @@ export default function ChatPage() {
 
   return (
     <div className="max-w-3xl flex flex-col h-[calc(100vh-10rem)]">
-      <h1 className="text-2xl font-semibold mb-4">Chat with Contracts</h1>
+      <h1 className="text-2xl font-semibold mb-4">Chat with Decisions</h1>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 mb-4">
         {messages.length === 0 && (
           <div>
             <p className="text-gray-500 text-sm mb-4">
-              Ask anything about your contracts. Try one of these:
+              Ask anything about your court decisions. Try one of these:
             </p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTIONS.map((s) => (
@@ -159,7 +159,7 @@ export default function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Ask about your contracts... (Enter to send)"
+          placeholder="Ask about your court decisions... (Enter to send)"
           rows={2}
           className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
