@@ -106,3 +106,20 @@ class ChatResponse(BaseModel):
     answer: str
     sql: Optional[str] = None
     results: Optional[list] = None
+
+
+class CaseSummaryRequest(BaseModel):
+    summary: str
+
+
+class SummaryMatchResult(BaseModel):
+    id: str
+    source_filename: Optional[str]
+    court: Optional[str]
+    case_number: Optional[str]
+    case_type: Optional[str]
+    plaintiff: Optional[str]
+    defendant: Optional[str]
+    outcome: Optional[str]
+    similarity: Optional[float] = None
+    matched_categories: Optional[List[str]] = None

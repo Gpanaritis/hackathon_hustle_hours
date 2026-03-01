@@ -195,6 +195,28 @@ def extract_decision_data(
 _TAXONOMY_DIMENSIONS = list(TAXONOMY.keys())
 
 
+def summarize_for_search(text: str) -> str:
+    """
+    Normalize a free-form case description into a concise 2-3 sentence legal summary
+    so its embedding lands in the same space as stored decision summaries.
+    """
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    message = client.messages.create(
+        model=MODEL,
+        max_tokens=256,
+        messages=[{
+            "role": "user",
+            "content": (
+                "Summarize the following case description in 2-3 sentences. "
+                "Focus on: the legal domain, the core dispute, and the outcome if mentioned. "
+                "Use the same language as the input. Return only the summary, no other text.\n\n"
+                + text
+            ),
+        }],
+    )
+    return message.content[0].text.strip()
+
+
 def classify_decision(context: str) -> list[dict]:
     """
     Second-pass classification: given a context string built from the

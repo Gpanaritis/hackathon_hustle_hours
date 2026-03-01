@@ -3,6 +3,7 @@ Chat router: natural language → Claude generates SQL → execute → return re
 """
 
 import json
+from typing import List
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.schemas.contracts import ChatMessage, ChatResponse
+from app.models.decisions import CourtDecision, DecisionCategory, DecisionEmbedding
+from app.modules.contracts.embedder import generate_embedding
+from app.modules.decisions.extractor import classify_decision, summarize_for_search
+from app.schemas.contracts import CaseSummaryRequest, ChatMessage, ChatResponse, SummaryMatchResult
 
 router = APIRouter()
 
@@ -179,3 +183,109 @@ def chat(body: ChatMessage, db: Session = Depends(get_db)):
         sql=sql,
         results=rows,
     )
+
+
+@router.post("/find-by-categories", response_model=List[SummaryMatchResult])
+def find_by_categories(body: CaseSummaryRequest, db: Session = Depends(get_db)):
+    """Classify the summary using the legal taxonomy, then return decisions with overlapping categories."""
+    if not body.summary.strip():
+        raise HTTPException(status_code=400, detail="Summary is empty.")
+
+    categories = classify_decision(body.summary)
+    valid_subcategories = [c["subcategory"] for c in categories if c.get("subcategory") != "UNKNOWN"]
+
+    if not valid_subcategories:
+        return []
+
+    matches = (
+        db.query(CourtDecision)
+        .join(DecisionCategory, DecisionCategory.decision_id == CourtDecision.id)
+        .filter(DecisionCategory.subcategory.in_(valid_subcategories))
+        .distinct()
+        .limit(20)
+        .all()
+    )
+
+    results = []
+    for d in matches:
+        matched = [c.subcategory for c in d.categories if c.subcategory in valid_subcategories]
+        results.append(SummaryMatchResult(
+            id=d.id,
+            source_filename=d.source_filename,
+            court=d.court,
+            case_number=d.case_number,
+            case_type=d.case_type,
+            plaintiff=d.plaintiff,
+            defendant=d.defendant,
+            outcome=d.outcome,
+            matched_categories=matched,
+        ))
+    return results
+
+
+@router.get("/debug-embeddings")
+def debug_embeddings(db: Session = Depends(get_db)):
+    """Diagnostic: report the state of the decision_embeddings table."""
+    total = db.query(DecisionEmbedding).count()
+    with_vector = db.query(DecisionEmbedding).filter(DecisionEmbedding.embedding.isnot(None)).count()
+    return {"total_rows": total, "rows_with_embedding": with_vector, "rows_without_embedding": total - with_vector}
+
+
+@router.post("/find-by-similarity", response_model=List[SummaryMatchResult])
+def find_by_similarity(body: CaseSummaryRequest, db: Session = Depends(get_db)):
+    """Embed the summary and return the most semantically similar decisions via vector search."""
+    if not body.summary.strip():
+        raise HTTPException(status_code=400, detail="Summary is empty.")
+
+    # Verify embeddings exist before doing the search
+    embedding_count = (
+        db.query(DecisionEmbedding)
+        .filter(DecisionEmbedding.embedding.isnot(None))
+        .count()
+    )
+    if embedding_count == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="No embeddings found in the database. Make sure decisions have been processed successfully.",
+        )
+
+    # Normalize the input into the same summary style as stored embeddings
+    normalized = summarize_for_search(body.summary)
+    embedding = generate_embedding(normalized)
+    if not embedding:
+        raise HTTPException(status_code=422, detail="Could not generate embedding for the provided summary.")
+
+    vec_str = "[" + ",".join(str(x) for x in embedding) + "]"
+    try:
+        rows = db.execute(
+            text("""
+                SELECT decision_id,
+                       embedding <=> CAST(:query_vec AS vector(384)) AS distance
+                FROM decisions.decision_embeddings
+                WHERE embedding IS NOT NULL
+                ORDER BY distance
+                LIMIT 10
+            """),
+            {"query_vec": vec_str},
+        ).fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Vector search failed: {e}")
+
+    results = []
+    for row in rows:
+        if row.distance is None:
+            continue
+        d = db.query(CourtDecision).filter(CourtDecision.id == row.decision_id).first()
+        if d:
+            results.append(SummaryMatchResult(
+                id=d.id,
+                source_filename=d.source_filename,
+                court=d.court,
+                case_number=d.case_number,
+                case_type=d.case_type,
+                plaintiff=d.plaintiff,
+                defendant=d.defendant,
+                outcome=d.outcome,
+                similarity=round((1 - row.distance) * 100, 1),
+            ))
+    return results

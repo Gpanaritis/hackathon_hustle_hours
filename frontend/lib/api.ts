@@ -217,3 +217,36 @@ export async function chat(message: string, history: { role: string; content: st
   if (!res.ok) throw new Error("Chat request failed");
   return res.json() as Promise<ChatResponse>;
 }
+
+export interface SummaryMatchResult {
+  id: string;
+  source_filename: string | null;
+  court: string | null;
+  case_number: string | null;
+  case_type: string | null;
+  plaintiff: string | null;
+  defendant: string | null;
+  outcome: string | null;
+  similarity: number | null;
+  matched_categories: string[] | null;
+}
+
+export async function findByCategories(summary: string) {
+  const res = await fetch(`${API_BASE}/chat/find-by-categories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ summary }),
+  });
+  if (!res.ok) throw new Error("Category search failed");
+  return res.json() as Promise<SummaryMatchResult[]>;
+}
+
+export async function findBySimilarity(summary: string) {
+  const res = await fetch(`${API_BASE}/chat/find-by-similarity`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ summary }),
+  });
+  if (!res.ok) throw new Error("Similarity search failed");
+  return res.json() as Promise<SummaryMatchResult[]>;
+}
