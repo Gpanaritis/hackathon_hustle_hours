@@ -1,6 +1,6 @@
 """
 Local embedding generation using sentence-transformers.
-Model: all-MiniLM-L6-v2 (384 dimensions).
+Model: paraphrase-multilingual-MiniLM-L12-v2 (384 dimensions, 50+ languages including Greek).
 The model is loaded once at module level and reused across requests.
 """
 
@@ -9,7 +9,7 @@ from typing import Optional
 
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
 
 @lru_cache(maxsize=1)

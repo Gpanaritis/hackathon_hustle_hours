@@ -178,18 +178,16 @@ def process_decision_from_text(
                 reference=ref,
             ))
 
-        text_to_embed = decision.full_text or ""
+        text_to_embed = decision.summary or ""
         if text_to_embed.strip():
-            chunks = _chunk_text(text_to_embed)
-            for idx, chunk in enumerate(chunks):
-                embedding = generate_embedding(chunk)
-                db.add(DecisionEmbedding(
-                    id=str(uuid.uuid4()),
-                    decision_id=decision_id,
-                    chunk_index=idx,
-                    chunk_text=chunk,
-                    embedding=embedding,
-                ))
+            embedding = generate_embedding(text_to_embed)
+            db.add(DecisionEmbedding(
+                id=str(uuid.uuid4()),
+                decision_id=decision_id,
+                chunk_index=0,
+                chunk_text=text_to_embed,
+                embedding=embedding,
+            ))
 
         decision.processing_status = "extracted"
 
@@ -303,19 +301,17 @@ def process_decision(
                 reference=ref,
             ))
 
-        # Chunked embeddings
-        text_to_embed = decision.full_text or ""
+        # Embed the summary — it's concise and discriminative, no chunking needed
+        text_to_embed = decision.summary or ""
         if text_to_embed.strip():
-            chunks = _chunk_text(text_to_embed)
-            for idx, chunk in enumerate(chunks):
-                embedding = generate_embedding(chunk)
-                db.add(DecisionEmbedding(
-                    id=str(uuid.uuid4()),
-                    decision_id=decision_id,
-                    chunk_index=idx,
-                    chunk_text=chunk,
-                    embedding=embedding,
-                ))
+            embedding = generate_embedding(text_to_embed)
+            db.add(DecisionEmbedding(
+                id=str(uuid.uuid4()),
+                decision_id=decision_id,
+                chunk_index=0,
+                chunk_text=text_to_embed,
+                embedding=embedding,
+            ))
 
         # Save file to disk
         _save_file(file_bytes, decision_id, file_name)

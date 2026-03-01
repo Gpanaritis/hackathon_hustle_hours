@@ -4,7 +4,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -146,29 +145,27 @@ def similar_decisions(decision_id: str, db: Session = Depends(get_db)):
     if not decision.embeddings:
         raise HTTPException(status_code=422, detail="No embeddings available for this decision.")
 
-    # Average the chunk embeddings to get a document-level vector
-    avg_embedding = db.query(
-        func.avg(DecisionEmbedding.embedding)
-    ).filter(DecisionEmbedding.decision_id == decision_id).scalar()
+    query_embedding = decision.embeddings[0].embedding
 
-    if avg_embedding is None:
+    if query_embedding is None:
         raise HTTPException(status_code=422, detail="No embeddings available for this decision.")
 
-    # Find closest documents by averaging their chunk embeddings and comparing
-    results = (
-        db.query(
-            DecisionEmbedding.decision_id,
-            func.avg(DecisionEmbedding.embedding.cosine_distance(avg_embedding)).label("avg_distance"),
-        )
-        .filter(DecisionEmbedding.decision_id != decision_id)
-        .group_by(DecisionEmbedding.decision_id)
-        .order_by("avg_distance")
-        .limit(5)
-        .all()
-    )
+    from sqlalchemy import text as sa_text
+    vec_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    rows = db.execute(
+        sa_text("""
+            SELECT decision_id,
+                   embedding <=> CAST(:query_vec AS vector(384)) AS distance
+            FROM decisions.decision_embeddings
+            WHERE decision_id != :did
+            ORDER BY distance
+            LIMIT 5
+        """),
+        {"query_vec": vec_str, "did": decision_id},
+    ).fetchall()
 
     similar = []
-    for row in results:
+    for row in rows:
         d = db.query(CourtDecision).filter(CourtDecision.id == row.decision_id).first()
         if d:
             similar.append(SimilarDecision(
@@ -176,6 +173,6 @@ def similar_decisions(decision_id: str, db: Session = Depends(get_db)):
                 source_filename=d.source_filename,
                 court=d.court,
                 case_number=d.case_number,
-                similarity=round((1 - row.avg_distance) * 100, 1),
+                similarity=round((1 - row.distance) * 100, 1),
             ))
     return similar
