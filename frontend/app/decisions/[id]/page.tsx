@@ -3,19 +3,22 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   getDecision,
   getSimilarDecisions,
+  deleteDecision,
   DecisionDetail,
   SimilarDecision,
 } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
-type Tab = "metadata" | "arguments" | "legal_refs" | "summary" | "full_text";
+type Tab = "metadata" | "categories" | "arguments" | "legal_refs" | "summary" | "full_text";
 
 export default function DecisionDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [decision, setDecision] = useState<DecisionDetail | null>(null);
   const [similar, setSimilar] = useState<SimilarDecision[] | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("metadata");
@@ -29,6 +32,12 @@ export default function DecisionDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  async function handleDelete() {
+    if (!confirm("Delete this decision? This cannot be undone.")) return;
+    await deleteDecision(id);
+    router.push("/decisions");
+  }
+
   function loadSimilar() {
     getSimilarDecisions(id)
       .then(setSimilar)
@@ -40,6 +49,7 @@ export default function DecisionDetailPage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "metadata", label: "Metadata" },
+    { key: "categories", label: `Categories (${decision.categories.length})` },
     { key: "arguments", label: `Arguments (${decision.arguments.length})` + (decision.arguments.length ? ` · ${decision.arguments.filter(a => a.side === "plaintiff").length}P / ${decision.arguments.filter(a => a.side === "defendant").length}D` : "") },
     { key: "legal_refs", label: `Legal Refs (${decision.legal_refs.length})` },
     { key: "summary", label: "Summary" },
@@ -66,13 +76,19 @@ export default function DecisionDetailPage() {
             rel="noopener noreferrer"
             className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-50"
           >
-            Download PDF
+            Download
           </a>
           <button
             onClick={loadSimilar}
             className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
           >
             Find Similar
+          </button>
+          <button
+            onClick={handleDelete}
+            className="bg-white border border-red-300 text-red-600 px-4 py-2 rounded text-sm hover:bg-red-50"
+          >
+            Delete
           </button>
         </div>
       </div>
@@ -148,6 +164,24 @@ export default function DecisionDetailPage() {
               value={decision.created_at ? new Date(decision.created_at).toLocaleString() : null}
             />
           </dl>
+        )}
+
+        {activeTab === "categories" && (
+          <div>
+            {decision.categories.length === 0 ? (
+              <p className="text-gray-500 text-sm">No categories assigned.</p>
+            ) : (
+              <div className="space-y-2">
+                {decision.categories.map((cat) => (
+                  <div key={cat.id} className="bg-gray-50 border border-gray-200 rounded px-4 py-2.5 text-sm">
+                    <span className="text-gray-500 text-xs">{cat.category}</span>
+                    <span className="mx-2 text-gray-300">/</span>
+                    <span className="font-medium text-gray-800">{cat.subcategory.replace(/_/g, " ")}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === "arguments" && (

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { listDecisions, DecisionListItem } from "@/lib/api";
+import { listDecisions, deleteDecision, DecisionListItem } from "@/lib/api";
 
 const STATUS_COLORS: Record<string, string> = {
   extracted: "bg-green-100 text-green-800",
@@ -49,6 +49,16 @@ export default function DecisionsPage() {
   function handleFilter(e: React.FormEvent) {
     e.preventDefault();
     load();
+  }
+
+  async function handleDelete(id: string, label: string) {
+    if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    try {
+      await deleteDecision(id);
+      setDecisions((prev) => prev.filter((d) => d.id !== id));
+    } catch {
+      alert("Failed to delete decision.");
+    }
   }
 
   function resetFilters() {
@@ -174,6 +184,7 @@ export default function DecisionsPage() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Outcome</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -201,6 +212,14 @@ export default function DecisionsPage() {
                     >
                       {d.processing_status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => handleDelete(d.id, d.case_number ?? d.source_filename ?? d.id.slice(0, 8))}
+                      className="text-gray-400 hover:text-red-600 text-xs"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

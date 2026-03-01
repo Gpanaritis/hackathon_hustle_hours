@@ -3,6 +3,7 @@ Chat router: natural language → Claude generates SQL → execute → return re
 """
 
 import json
+from typing import List
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,76 +12,94 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.schemas.contracts import ChatMessage, ChatResponse
+from app.models.decisions import CourtDecision, DecisionCategory, DecisionEmbedding
+from app.modules.contracts.embedder import generate_embedding
+from app.modules.decisions.extractor import classify_decision, summarize_for_search
+from app.schemas.contracts import CaseSummaryRequest, ChatMessage, ChatResponse, SummaryMatchResult
 
 router = APIRouter()
 
 MODEL = "claude-opus-4-6"
 
 DB_SCHEMA = """
-Database schema (PostgreSQL):
+-- =====================================================
+-- COURT DECISIONS — DATABASE SCHEMA
+-- PostgreSQL + pgvector
+-- Schema: decisions
+-- =====================================================
 
-contracts (
-  contract_id SERIAL PRIMARY KEY,
-  internal_ref_no VARCHAR(50),
-  file_name VARCHAR(255),
-  pdf_path TEXT,
-  file_hash VARCHAR(64),
-  country_code CHAR(2),
-  jurisdiction_state_city VARCHAR(100),
-  language VARCHAR(20),
-  execution_date DATE,
-  term_years INTEGER,
-  expiry_date DATE,
-  is_exclusive BOOLEAN,
-  status VARCHAR(20),
-  signature_present BOOLEAN,
-  stamp_present BOOLEAN,
-  upload_date TIMESTAMP
-)
+CREATE EXTENSION IF NOT EXISTS vector;
 
-contract_parties (
-  party_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  role VARCHAR(50),
-  legal_name VARCHAR(255),
-  representative_name VARCHAR(255),
-  id_type VARCHAR(50),
-  id_value VARCHAR(100),
-  address TEXT
-)
+CREATE SCHEMA IF NOT EXISTS decisions;
 
-musical_works (
-  work_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  title VARCHAR(255),
-  artist_performer VARCHAR(255),
-  lyricist VARCHAR(255),
-  isrc_code VARCHAR(20),
-  collection_society VARCHAR(50)
-)
+-- ENUM
+CREATE TYPE decisions.decisionstatus AS ENUM ('pending', 'extracted', 'failed');
 
-contract_terms (
-  term_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  remuneration_amount DECIMAL(15,2),
-  currency VARCHAR(3),
-  min_penalty_liquidated_damages DECIMAL(15,2),
-  delivery_deadline_days INTEGER,
-  registration_deadline_days INTEGER,
-  streaming_requirement_days INTEGER
-)
+-- 1. COURT DECISIONS (core record)
+CREATE TABLE decisions.court_decisions (
+    id                  VARCHAR(36)                     PRIMARY KEY,
+    source_filename     TEXT,
 
-contract_intelligence (
-  intel_id SERIAL PRIMARY KEY,
-  contract_id INTEGER REFERENCES contracts(contract_id),
-  raw_text TEXT,
-  summary_short TEXT,
-  translated_text_en TEXT
-)
+    court               TEXT,
+    judge               TEXT,
+    case_number         TEXT,
+    case_type           TEXT,
+    plaintiff           TEXT,
+    defendant           TEXT,
+    outcome             TEXT,
+    decision_date       DATE,
+
+    full_text           TEXT,
+    summary             TEXT,
+    monetary_award      NUMERIC(15, 2),
+    appeal_of           TEXT,
+
+    processing_status   decisions.decisionstatus        NOT NULL DEFAULT 'pending',
+    is_ocr              BOOLEAN                         NOT NULL DEFAULT FALSE,
+    ocr_confidence      FLOAT,
+    extraction_error    TEXT,
+
+    created_at          TIMESTAMPTZ                     NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ                     NOT NULL DEFAULT NOW()
+);
+
+-- 2. EMBEDDINGS
+CREATE TABLE decisions.decision_embeddings (
+    id              VARCHAR(36) PRIMARY KEY,
+    decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    chunk_index     INT         NOT NULL,
+    chunk_text      TEXT        NOT NULL,
+    embedding       VECTOR(384),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (decision_id, chunk_index)
+);
+
+-- 3. ARGUMENTS
+CREATE TABLE decisions.decision_arguments (
+    id              VARCHAR(36) PRIMARY KEY,
+    decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    side            VARCHAR(20) NOT NULL,
+    argument        TEXT        NOT NULL,
+    position        INT         NOT NULL
+);
+
+-- 4. CATEGORIES
+CREATE TABLE decisions.decision_categories (
+    id          VARCHAR(36) PRIMARY KEY,
+    decision_id VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    category    TEXT        NOT NULL,
+    subcategory TEXT        NOT NULL
+);
+
+-- 5. LEGAL REFERENCES
+CREATE TABLE decisions.decision_legal_refs (
+    id              VARCHAR(36) PRIMARY KEY,
+    decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    reference       TEXT        NOT NULL
+);
 """
 
-SYSTEM_PROMPT = f"""You are a SQL expert assistant for a music contract management system.
+SYSTEM_PROMPT = f"""You are a SQL expert assistant for a court decisions management system. You help users query a database of court decisions, including case details, parties (plaintiff/defendant), arguments, legal references, and categories.
 
 {DB_SCHEMA}
 
@@ -164,3 +183,109 @@ def chat(body: ChatMessage, db: Session = Depends(get_db)):
         sql=sql,
         results=rows,
     )
+
+
+@router.post("/find-by-categories", response_model=List[SummaryMatchResult])
+def find_by_categories(body: CaseSummaryRequest, db: Session = Depends(get_db)):
+    """Classify the summary using the legal taxonomy, then return decisions with overlapping categories."""
+    if not body.summary.strip():
+        raise HTTPException(status_code=400, detail="Summary is empty.")
+
+    categories = classify_decision(body.summary)
+    valid_subcategories = [c["subcategory"] for c in categories if c.get("subcategory") != "UNKNOWN"]
+
+    if not valid_subcategories:
+        return []
+
+    matches = (
+        db.query(CourtDecision)
+        .join(DecisionCategory, DecisionCategory.decision_id == CourtDecision.id)
+        .filter(DecisionCategory.subcategory.in_(valid_subcategories))
+        .distinct()
+        .limit(20)
+        .all()
+    )
+
+    results = []
+    for d in matches:
+        matched = [c.subcategory for c in d.categories if c.subcategory in valid_subcategories]
+        results.append(SummaryMatchResult(
+            id=d.id,
+            source_filename=d.source_filename,
+            court=d.court,
+            case_number=d.case_number,
+            case_type=d.case_type,
+            plaintiff=d.plaintiff,
+            defendant=d.defendant,
+            outcome=d.outcome,
+            matched_categories=matched,
+        ))
+    return results
+
+
+@router.get("/debug-embeddings")
+def debug_embeddings(db: Session = Depends(get_db)):
+    """Diagnostic: report the state of the decision_embeddings table."""
+    total = db.query(DecisionEmbedding).count()
+    with_vector = db.query(DecisionEmbedding).filter(DecisionEmbedding.embedding.isnot(None)).count()
+    return {"total_rows": total, "rows_with_embedding": with_vector, "rows_without_embedding": total - with_vector}
+
+
+@router.post("/find-by-similarity", response_model=List[SummaryMatchResult])
+def find_by_similarity(body: CaseSummaryRequest, db: Session = Depends(get_db)):
+    """Embed the summary and return the most semantically similar decisions via vector search."""
+    if not body.summary.strip():
+        raise HTTPException(status_code=400, detail="Summary is empty.")
+
+    # Verify embeddings exist before doing the search
+    embedding_count = (
+        db.query(DecisionEmbedding)
+        .filter(DecisionEmbedding.embedding.isnot(None))
+        .count()
+    )
+    if embedding_count == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="No embeddings found in the database. Make sure decisions have been processed successfully.",
+        )
+
+    # Normalize the input into the same summary style as stored embeddings
+    normalized = summarize_for_search(body.summary)
+    embedding = generate_embedding(normalized)
+    if not embedding:
+        raise HTTPException(status_code=422, detail="Could not generate embedding for the provided summary.")
+
+    vec_str = "[" + ",".join(str(x) for x in embedding) + "]"
+    try:
+        rows = db.execute(
+            text("""
+                SELECT decision_id,
+                       embedding <=> CAST(:query_vec AS vector(384)) AS distance
+                FROM decisions.decision_embeddings
+                WHERE embedding IS NOT NULL
+                ORDER BY distance
+                LIMIT 10
+            """),
+            {"query_vec": vec_str},
+        ).fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Vector search failed: {e}")
+
+    results = []
+    for row in rows:
+        if row.distance is None:
+            continue
+        d = db.query(CourtDecision).filter(CourtDecision.id == row.decision_id).first()
+        if d:
+            results.append(SummaryMatchResult(
+                id=d.id,
+                source_filename=d.source_filename,
+                court=d.court,
+                case_number=d.case_number,
+                case_type=d.case_type,
+                plaintiff=d.plaintiff,
+                defendant=d.defendant,
+                outcome=d.outcome,
+                similarity=round((1 - row.distance) * 100, 1),
+            ))
+    return results

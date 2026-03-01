@@ -14,9 +14,9 @@ from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models.decisions import CourtDecision, DecisionArgument, DecisionEmbedding, DecisionLegalRef
+from app.models.decisions import CourtDecision, DecisionArgument, DecisionCategory, DecisionEmbedding, DecisionLegalRef
 from app.modules.contracts.embedder import generate_embedding
-from app.modules.decisions.extractor import extract_decision_data
+from app.modules.decisions.extractor import classify_decision, extract_decision_data
 
 MIN_TEXT_CHARS = 50
 IMAGE_DPI = 200
@@ -76,6 +76,32 @@ def _save_file(file_bytes: bytes, decision_id: str, file_name: str) -> str:
     return str(file_path)
 
 
+def _build_classification_context(decision: "CourtDecision", extraction: dict) -> str:
+    """Build a rich text context for classification from all extracted fields."""
+    parts = []
+
+    if decision.case_type:
+        parts.append(f"Case type: {decision.case_type}")
+    if decision.outcome:
+        parts.append(f"Outcome: {decision.outcome}")
+    if decision.summary:
+        parts.append(f"Summary: {decision.summary}")
+
+    plaintiff_args = extraction.get("plaintiff_arguments", [])
+    if plaintiff_args:
+        parts.append("Plaintiff arguments:\n" + "\n".join(f"- {a}" for a in plaintiff_args))
+
+    defendant_args = extraction.get("defendant_arguments", [])
+    if defendant_args:
+        parts.append("Defendant arguments:\n" + "\n".join(f"- {a}" for a in defendant_args))
+
+    legal_refs = extraction.get("legal_refs", [])
+    if legal_refs:
+        parts.append("Legal references:\n" + "\n".join(f"- {r}" for r in legal_refs))
+
+    return "\n\n".join(parts)
+
+
 def process_decision_from_text(
     text: str,
     label: str,
@@ -117,6 +143,17 @@ def process_decision_from_text(
             except (ValueError, TypeError):
                 pass
 
+        classification_context = _build_classification_context(decision, extraction)
+        if classification_context:
+            categories = classify_decision(classification_context)
+            for cat in categories:
+                db.add(DecisionCategory(
+                    id=str(uuid.uuid4()),
+                    decision_id=decision_id,
+                    category=cat.get("category", ""),
+                    subcategory=cat.get("subcategory", ""),
+                ))
+
         for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):
             db.add(DecisionArgument(
                 id=str(uuid.uuid4()),
@@ -141,18 +178,16 @@ def process_decision_from_text(
                 reference=ref,
             ))
 
-        text_to_embed = decision.full_text or ""
+        text_to_embed = decision.summary or ""
         if text_to_embed.strip():
-            chunks = _chunk_text(text_to_embed)
-            for idx, chunk in enumerate(chunks):
-                embedding = generate_embedding(chunk)
-                db.add(DecisionEmbedding(
-                    id=str(uuid.uuid4()),
-                    decision_id=decision_id,
-                    chunk_index=idx,
-                    chunk_text=chunk,
-                    embedding=embedding,
-                ))
+            embedding = generate_embedding(text_to_embed)
+            db.add(DecisionEmbedding(
+                id=str(uuid.uuid4()),
+                decision_id=decision_id,
+                chunk_index=0,
+                chunk_text=text_to_embed,
+                embedding=embedding,
+            ))
 
         decision.processing_status = "extracted"
 
@@ -230,6 +265,17 @@ def process_decision(
                 pass
 
         # Arguments
+        classification_context = _build_classification_context(decision, extraction)
+        if classification_context:
+            categories = classify_decision(classification_context)
+            for cat in categories:
+                db.add(DecisionCategory(
+                    id=str(uuid.uuid4()),
+                    decision_id=decision_id,
+                    category=cat.get("category", ""),
+                    subcategory=cat.get("subcategory", ""),
+                ))
+
         for i, arg in enumerate(extraction.get("plaintiff_arguments", [])):
             db.add(DecisionArgument(
                 id=str(uuid.uuid4()),
@@ -255,19 +301,17 @@ def process_decision(
                 reference=ref,
             ))
 
-        # Chunked embeddings
-        text_to_embed = decision.full_text or ""
+        # Embed the summary — it's concise and discriminative, no chunking needed
+        text_to_embed = decision.summary or ""
         if text_to_embed.strip():
-            chunks = _chunk_text(text_to_embed)
-            for idx, chunk in enumerate(chunks):
-                embedding = generate_embedding(chunk)
-                db.add(DecisionEmbedding(
-                    id=str(uuid.uuid4()),
-                    decision_id=decision_id,
-                    chunk_index=idx,
-                    chunk_text=chunk,
-                    embedding=embedding,
-                ))
+            embedding = generate_embedding(text_to_embed)
+            db.add(DecisionEmbedding(
+                id=str(uuid.uuid4()),
+                decision_id=decision_id,
+                chunk_index=0,
+                chunk_text=text_to_embed,
+                embedding=embedding,
+            ))
 
         # Save file to disk
         _save_file(file_bytes, decision_id, file_name)

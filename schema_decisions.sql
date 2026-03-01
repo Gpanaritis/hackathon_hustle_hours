@@ -60,7 +60,15 @@ CREATE TABLE decisions.decision_arguments (
     position        INT         NOT NULL
 );
 
--- 4. LEGAL REFERENCES
+-- 4. CATEGORIES
+CREATE TABLE decisions.decision_categories (
+    id          VARCHAR(36) PRIMARY KEY,
+    decision_id VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
+    category    TEXT        NOT NULL,
+    subcategory TEXT        NOT NULL
+);
+
+-- 5. LEGAL REFERENCES
 CREATE TABLE decisions.decision_legal_refs (
     id              VARCHAR(36) PRIMARY KEY,
     decision_id     VARCHAR(36) NOT NULL REFERENCES decisions.court_decisions(id) ON DELETE CASCADE,
@@ -84,6 +92,7 @@ CREATE INDEX ix_decisions_fulltext   ON decisions.court_decisions
 CREATE INDEX ix_embeddings_vector    ON decisions.decision_embeddings
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
+CREATE INDEX ix_categories_decision  ON decisions.decision_categories(decision_id);
 CREATE INDEX ix_arguments_decision   ON decisions.decision_arguments(decision_id);
 CREATE INDEX ix_legalrefs_decision   ON decisions.decision_legal_refs(decision_id);
 CREATE INDEX ix_legalrefs_reference  ON decisions.decision_legal_refs(reference);
