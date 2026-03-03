@@ -1,3 +1,9 @@
+Go here to view the app:
+http://192.168.20.146:5173/
+
+
+
+
 # Contract Intelligence
 
 Turns PDF contracts into structured relational records. Supports AI chat, guided queries, and vector similarity search.
