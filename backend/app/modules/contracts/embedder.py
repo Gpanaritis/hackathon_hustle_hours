@@ -15,7 +15,7 @@ MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 @lru_cache(maxsize=1)
 def _get_model() -> SentenceTransformer:
     """Load model once, cache it."""
-    return SentenceTransformer(MODEL_NAME)
+    return SentenceTransformer(MODEL_NAME, device="cpu")
 
 
 def generate_embedding(text: str) -> Optional[list[float]]:

@@ -28,3 +28,4 @@ frontend/out/
 .DS_Store
 *.log
 output/
+old_db.dump

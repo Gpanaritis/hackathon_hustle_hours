@@ -1,0 +1,70 @@
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-contracts_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./schema_decisions.sql:/docker-entrypoint-initdb.d/02-schema-decisions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-contracts_db}
+      STORAGE_PATH: /app/storage/contracts
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    volumes:
+      - backend_storage:/app/storage
+      - backend_model_cache:/root/.cache
+
+  frontend:
+    profiles: ["dev-ui"]
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001/api/v1}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3001}:3001"
+
+  db_restore:
+    image: postgres:18
+    profiles: ["restore"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-contracts_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      RESTORE_FILE: ${RESTORE_FILE:-}
+    volumes:
+      - ./backups:/backups:ro
+      - ./docker/db/restore.sh:/restore.sh:ro
+    entrypoint: ["/bin/sh", "/restore.sh"]
+
+volumes:
+  postgres_data:
+  backend_storage:
+  backend_model_cache:
